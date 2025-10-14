@@ -10,7 +10,7 @@ import subprocess
 
 # --- Configuration ---
 USER_PROFILE_PATH = pathlib.Path("./chrome_profile/")
-TARGET_URL = "https://example.com"  # <-- вставь нужный URL
+TARGET_URL = "https://idx.google.com/noxy-panel-59774499"  # <-- вставь нужный URL
 IDLE_TIME_SECONDS = 60
 CHROME_BINARY_PATH = "./chrome/chrome"
 CHROMEDRIVER_PATH = "./chrome/chromedriver"
