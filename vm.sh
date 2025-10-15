@@ -15,7 +15,6 @@ HOSTNAME="noxy"
 USERNAME="root"
 PASSWORD="554466DSAFf"
 SWAP_SIZE=4G
-HUGEPAGE_PATH="/dev/hugepages"
 OVMF_CODE="/usr/share/OVMF/OVMF_CODE.fd"
 NUMA_NODES=2
 
@@ -32,18 +31,11 @@ if [ -e /dev/kvm ] && [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
     ACCELERATION_FLAG="-enable-kvm -cpu host"
 else
     ACCELERATION_FLAG="-accel tcg"
+    echo "WARNING: KVM not available, using TCG (slower, may lag under high load)"
 fi
 
-HUGEPAGES_NEEDED=$(( $(echo $MEMORY | sed 's/G//') * 1024 / 2 ))
-if ! grep -q "hugepages" /etc/default/grub; then
-    read -p "Configure hugepages now? (y/n): " answer
-    if [ "$answer" = "y" ]; then
-        sudo mkdir -p /dev/hugepages
-        sudo mount -t hugetlbfs none /dev/hugepages
-        sudo bash -c "echo 'hugepages=$HUGEPAGES_NEEDED' >> /etc/default/grub.d/50-hugepages.cfg"
-        sudo update-grub
-        exit 1
-    fi
+if ! grep -q "127.0.0.1.*jupyter-mahex13800-40arqsis-2ecom" /etc/hosts; then
+    echo "127.0.0.1 jupyter-mahex13800-40arqsis-2ecom" | sudo tee -a /etc/hosts
 fi
 
 if [ ! -f "$IMG_FILE" ]; then
@@ -62,22 +54,11 @@ chpasswd:
 packages:
   - openssh-server
   - qemu-guest-agent
-  - nginx
-  - php-fpm
-  - mariadb-server
-  - redis
 cloud_init_modules:
   - bootcmd
 runcmd:
   - echo "$USERNAME:$PASSWORD" | chpasswd
   - if [ "$SWAP_SIZE" != "0G" ]; then fallocate -l $SWAP_SIZE /swapfile; chmod 600 /swapfile; mkswap /swapfile; swapon /swapfile; echo '/swapfile none swap sw 0 0' >> /etc/fstab; fi
-  - systemctl enable --now nginx php8.1-fpm mariadb redis
-  - curl -sL https://deb.nodesource.com/setup_18.x | bash -
-  - apt install -y nodejs
-  - npm install -g pm2
-  - curl -sS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup | bash
-  - apt update && apt install -y mariadb-server
-  - mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '$PASSWORD';"
 growpart:
   mode: auto
   devices: ["/"]
@@ -104,10 +85,8 @@ exec qemu-system-x86_64 \
     $ACCELERATION_FLAG \
     -machine q35,mem-merge=off,hmat=on \
     -m "$MEMORY" -mem-prealloc \
-    -object memory-backend-file,id=ram-node0,size=128G,mem-path=$HUGEPAGE_PATH,share=on,prealloc=on \
-    -object memory-backend-file,id=ram-node1,size=128G,mem-path=$HUGEPAGE_PATH,share=on,prealloc=on \
-    -numa node,nodeid=0,memdev=ram-node0 \
-    -numa node,nodeid=1,memdev=ram-node1 \
+    -numa node,mem=128G,cpus=0-15,nodeid=0 \
+    -numa node,mem=128G,cpus=16-31,nodeid=1 \
     -smp "$CPUS",sockets=2,cores=16,threads=1 \
     -drive file="$IMG_FILE",format=qcow2,if=virtio,cache=writeback \
     -drive file="$UBUNTU_PERSISTENT_DISK",format=qcow2,if=virtio,cache=writeback \
